@@ -24,43 +24,41 @@ g2t_void _TSTC_OnPaint(g2t_wnd wnd, g2t_dc dc)
     g2t_char buf[G2T_MAX_WNDTEXT + 1];
     g2t_char text[G2T_MAX_WNDTEXT + 1];
     g2t_rect rc;
-    g2t_char* pos = 0;
-    g2t_char subbuf[G2T_MAX_WNDTEXT + 1];
-    g2t_long len = 0;
-    g2t_long len2 = 0;
+    g2t_string pos = 0;
+    g2t_char   nextch = 0;
 
     if (g2t_IsWndVisible(wnd))
     {
         g2t_GetWndRect(wnd, &rc);
 
         g2t_GetWndText(wnd, text, G2T_MAX_WNDTEXT);
-        g2t_PrintTextAlignment(buf, text, rc.cols, g2t_GetWndStyle(wnd));
+        pos = g2t_strchr(text, '&');
 
-        pos = strchr(buf, '&');
-        if (0 == pos)
+        if (!pos)
         {
+            g2t_PrintTextAlignment(buf, text, rc.cols, g2t_GetWndStyle(wnd));
             g2t_DrawText(dc, rc.x, rc.y, buf, g2t_GetTextColor(wnd), g2t_GetBgColor(wnd));
         }
         else
         {
-            len = (g2t_long)(size_t)(pos - buf);
-            if (len > 0)
+            ++pos;
+            nextch = *pos;
+
+            g2t_strcpywo(buf, text, '&');
+            g2t_strcpy(text, buf);
+            g2t_PrintTextAlignment(buf, text, rc.cols, g2t_GetWndStyle(wnd));
+            g2t_DrawText(dc, rc.x, rc.y, buf, g2t_GetTextColor(wnd), g2t_GetBgColor(wnd));
+
+            if (nextch)
             {
-                g2t_memset(subbuf, 0, sizeof(subbuf));
-                g2t_memcpy(subbuf, buf, len);
-                g2t_DrawText(dc, rc.x, rc.y, subbuf, g2t_GetTextColor(wnd), g2t_GetBgColor(wnd));
+                pos = g2t_strchr(buf, nextch);
+                if (pos)
+                {
+                    text[0] = nextch;
+                    text[1] = 0;
+                    g2t_DrawText(dc, rc.x+(g2t_long)(pos-buf), rc.y, text, g2t_GetBgColor(wnd), g2t_GetTextColor(wnd));
+                }
             }
-
-            g2t_memset(subbuf, 0, sizeof(subbuf));
-            g2t_memcpy(subbuf, &buf[(size_t)(pos - buf)]+1, 1);
-            g2t_DrawText(dc, rc.x+len, rc.y, subbuf,
-                g2t_GetSysColor(STATIC_MNEMONIC_TEXTCOLOR),
-                g2t_GetSysColor(STATIC_MNEMONIC_BGCOLOR));
-
-            len2 = strlen(buf) - (size_t)(pos - buf) + 1;
-            g2t_memset(subbuf, 0, sizeof(subbuf));
-            g2t_memcpy(subbuf, &buf[(size_t)(pos - buf)]+2, len2);
-            g2t_DrawText(dc, rc.x+len+1, rc.y, subbuf, g2t_GetTextColor(wnd), g2t_GetBgColor(wnd));
         }
     }
 }

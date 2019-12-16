@@ -62,7 +62,6 @@ g2t_long _TLB_OnKillFocus(g2t_wnd wnd);
 g2t_void _TLB_OnSetFocus(g2t_wnd wnd);
 g2t_void _TLB_OnDestroy(g2t_wnd wnd);
 g2t_long _TLB_OnCreate(g2t_wnd wnd);
-
 g2t_long G2TLISTBOXPROC(g2t_wnd wnd, g2t_uint32 msg, g2t_wparam wparam, g2t_lparam lparam);
 
 tlistbox_t* _GLB_FindItemByIndex(g2t_wnd wnd, g2t_int idx)
@@ -287,6 +286,7 @@ g2t_void _TLB_OnPaint(g2t_wnd wnd, g2t_dc dc)
     tlistbox_t* item = 0;
     g2t_char buf[G2T_MAX_WNDTEXT + 1];
     g2t_char text[G2T_MAX_WNDTEXT + 1];
+    g2t_dword attrs = g2t_GetWndTextAttrs(wnd);
     g2t_drawitem di;
     g2t_rect rc;
     g2t_dword style = g2t_GetWndStyle(wnd);
@@ -298,10 +298,8 @@ g2t_void _TLB_OnPaint(g2t_wnd wnd, g2t_dc dc)
     g2t_dword selbg = g2t_GetSysColor(LISTBOX_HIGHLIGHTED_BGCOLOR);
     g2t_dword textcolor = g2t_GetSysColor(LISTBOX_TEXTCOLOR);
     g2t_dword bgcolor = g2t_GetSysColor(LISTBOX_BGCOLOR);
-    g2t_dword oddtext = g2t_GetSysColor(LISTBOX_ODD_TEXTCOLOR);
-    g2t_dword oddbg = g2t_GetSysColor(LISTBOX_ODD_BGCOLOR);
-    g2t_dword eventext = g2t_GetSysColor(LISTBOX_EVEN_TEXTCOLOR);
-    g2t_dword evenbg = g2t_GetSysColor(LISTBOX_EVEN_BGCOLOR);
+/*    g2t_dword seltext = g2t_GetReverseColor(textcolor);
+    g2t_dword selbg = g2t_GetReverseColor(bgcolor);*/
 
     if (!g2t_IsWndVisible(wnd))
     {
@@ -379,39 +377,17 @@ g2t_void _TLB_OnPaint(g2t_wnd wnd, g2t_dc dc)
                     }
                     else
                     {
-                        if (GLBS_MULTICOLOR & style)
-                        {
-                            if (0 == i%2)
-                            {
-                                g2t_DrawText(dc,
-                                             rc.x,
-                                             rc.y + (i - lb->firstvisible),
-                                             buf,
-                                             eventext, evenbg);
-                            }
-                            else
-                            {
-                                g2t_DrawText(dc,
-                                             rc.x,
-                                             rc.y + (i - lb->firstvisible),
-                                             buf,
-                                             oddtext, oddbg);
-                            }
-                        }
-                        else
-                        {
-                            g2t_DrawText(dc,
-                                         rc.x,
-                                         rc.y + (i - lb->firstvisible),
-                                         buf,
-                                         textcolor, bgcolor);
-                        }
+                        g2t_DrawText(dc,
+                                     rc.x,
+                                     rc.y + (i - lb->firstvisible),
+                                     buf,
+                                     textcolor, bgcolor);
                     }
                 }
             }/* not owner draw */
         } /* for each item */
         /*draw the selected item */
-        
+
         g2t_DrawText(dc,
                      xsel,
                      ysel,

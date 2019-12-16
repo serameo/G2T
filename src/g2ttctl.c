@@ -1180,11 +1180,7 @@ TVOID _TTC_OnPaint(TWND wnd, TDC dc)
     g2t_dword textcolor = g2t_GetTextColor(wnd);
     g2t_dword bgcolor = g2t_GetBgColor(wnd);
     TDWORD htextcolor = g2t_GetSysColor(TREECTRL_HIGHLIGHTED_TEXTCOLOR);
-    TDWORD hbgcolor =    g2t_GetSysColor(TREECTRL_HIGHLIGHTED_BGCOLOR);
-    g2t_dword oddtext =  g2t_GetSysColor(TREECTRL_ODD_TEXTCOLOR);
-    g2t_dword oddbg =    g2t_GetSysColor(TREECTRL_ODD_BGCOLOR);
-    g2t_dword eventext = g2t_GetSysColor(TREECTRL_EVEN_TEXTCOLOR);
-    g2t_dword evenbg =   g2t_GetSysColor(TREECTRL_EVEN_BGCOLOR);
+    TDWORD hbgcolor = g2t_GetSysColor(TREECTRL_HIGHLIGHTED_BGCOLOR);
 
     tc = (TTREECTRLSTRUCT*) g2t_GetWndParam(wnd);
 
@@ -1247,19 +1243,6 @@ TVOID _TTC_OnPaint(TWND wnd, TDC dc)
             }
             else
             {
-                if (TTCS_MULTICOLOR & style)
-                {
-                    if (0 == displayableitems%2)
-                    {
-                        textcolor = eventext;
-                        bgcolor = evenbg;
-                    }
-                    else
-                    {
-                        textcolor = oddtext;
-                        bgcolor = oddbg;
-                    }
-                }
                 g2t_DrawText(dc, rc.x, y, buf, textcolor, bgcolor);
             }
             /* next line */

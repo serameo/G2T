@@ -46,8 +46,9 @@ struct _g2t_env
     g2t_accel* accel;
     /* window message */
     HINSTANCE hinst;
-    HWND hMainWnd;
     HWND hwnd;
+    HWND hwndParent;
+    HWND hMainWnd;
     HDC hdc;
     HDC hmemdc;
     HBITMAP hbmp;
@@ -129,6 +130,8 @@ g2t_long G2TBUTTONPROC(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
 g2t_long G2TLISTCTRLPROC(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
 g2t_long G2TTREECTRLPROC(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
 g2t_long G2TTSCHARTPROC(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
+g2t_long G2TPAGECTRLPROC(g2t_wnd wnd, g2t_uint32 msg, g2t_wparam wparam, g2t_lparam lparam);
+g2t_long G2TCHILDPAGEPROC(g2t_wnd wnd, g2t_uint32 msg, g2t_wparam wparam, g2t_lparam lparam);
 
 /* helper functions */
 g2t_wndproc_t* _g2t_FindWndProc(g2t_env env, g2t_string clsname)
@@ -174,11 +177,13 @@ g2t_status g2t_StartUp(HINSTANCE hinst)
     env->props = CreateSafeProp(0);
 
     /* register standard controls */
-    g2t_RegisterCls(G2T_STATIC, G2TSTATICPROC);
-    g2t_RegisterCls(G2T_EDITBOX, G2TEDITBOXPROC);
-    g2t_RegisterCls(G2T_LISTBOX, G2TLISTBOXPROC);
-    g2t_RegisterCls(G2T_LISTCTRL, G2TLISTCTRLPROC);
-    g2t_RegisterCls(G2T_TREECTRL, G2TTREECTRLPROC);
+    g2t_RegisterCls(G2T_STATIC,    G2TSTATICPROC);
+    g2t_RegisterCls(G2T_EDITBOX,   G2TEDITBOXPROC);
+    g2t_RegisterCls(G2T_LISTBOX,   G2TLISTBOXPROC);
+    g2t_RegisterCls(G2T_LISTCTRL,  G2TLISTCTRLPROC);
+    g2t_RegisterCls(G2T_TREECTRL,  G2TTREECTRLPROC);
+    g2t_RegisterCls(G2T_PAGECTRL,  G2TPAGECTRLPROC);
+    g2t_RegisterCls(G2T_CHILDPAGE, G2TCHILDPAGEPROC);
 
     env->hinst = hinst;
     rc = g2t_InitLockedObject(&env->lockedq);
@@ -338,6 +343,34 @@ g2t_dword  g2t_GetReverseColor(g2t_dword color)
     blue = 0xff & labs(255 - blue);
     return RGB(red, green, blue);
 }
+
+g2t_long g2t_GetScreenLines()
+{
+    g2t_env env = g2t_GetEnv();
+    g2t_long lines = 25;
+
+    env->props->GetInt(env->props, ENV_SCREEN_LINES, &lines, G2T_SCREEN_LINES);
+    if (lines < G2T_SCREEN_LINES)
+    {
+        lines = G2T_SCREEN_LINES;
+    }
+    return lines;
+}
+
+g2t_long g2t_GetScreenColumns()
+{
+    g2t_env env = g2t_GetEnv();
+    g2t_long cols = 80;
+
+    env->props->GetInt(env->props, ENV_SCREEN_COLS, &cols, G2T_SCREEN_COLS);
+    if (cols < G2T_SCREEN_COLS)
+    {
+        cols = G2T_SCREEN_COLS;
+    }
+    return cols;
+}
+
+
 g2t_dword g2t_GetSysColor(g2t_string sysname)
 {
     g2t_dword color = G2T_RGB_BLACK;
@@ -393,6 +426,12 @@ g2t_dword g2t_GetSysHighlightedBgColor()
     return color;
 }
 
+HWND g2t_GetHwndParent()
+{
+    g2t_env env = g2t_GetEnv();
+    return env->hwndParent;
+}
+
 HWND g2t_GetHwnd()
 {
     g2t_env env = g2t_GetEnv();
@@ -426,14 +465,14 @@ g2t_void g2t_ReleaseEnvWnd()
 }
 
 g2t_status g2t_AllocateEnvWnd(
-                              g2t_dword dwExStyle,
-                              g2t_dword dwStyle,
-                              g2t_int x,
-                              g2t_int y,
-                              g2t_int cx,
-                              g2t_int cy,
-                              HWND hwndParent,
-                              UINT nID)
+    g2t_dword dwExStyle,
+    g2t_dword dwStyle,
+    g2t_int x,
+    g2t_int y,
+    g2t_int cx,
+    g2t_int cy,
+    HWND hwndParent,
+    UINT nID)
 {
     g2t_status rc = G2T_OK;
     g2t_env env = g2t_GetEnv();
@@ -452,6 +491,7 @@ g2t_status g2t_AllocateEnvWnd(
         return rc;
     }
     env->hwnd = hwnd;
+    env->hwndParent = hwndParent;
     env->hdc = GetDC(hwnd);
     env->hmemdc = CreateCompatibleDC(env->hdc);
     env->hbmp = CreateCompatibleBitmap(env->hdc, 
@@ -636,9 +676,43 @@ g2t_status _g2t_TranslateMsg(g2t_msg* msg)
         /* check if the pressed key has been loaded into the accelerator table */
         if (env->accel)
         {
+            g2t_bool isVkeyPressed = G2T_FALSE;
+            g2t_bool isCtrlKeyPressed = G2T_FALSE;
+            g2t_bool isShiftKeyPressed = G2T_FALSE;
+
             for (i = 0; env->accel[i].cmd != 0; ++i)
             {
+                isVkeyPressed = G2T_FALSE;
+                isCtrlKeyPressed = G2T_FALSE;
+                isShiftKeyPressed = G2T_FALSE;
+
                 if (env->accel[i].vkey == ch)
+                {
+                    isVkeyPressed = G2T_TRUE;
+                }
+                if (env->accel[i].ctrlkey)
+                {
+                    if (GetKeyState(VK_CONTROL))
+                    {
+                        isCtrlKeyPressed = G2T_TRUE;
+                    }
+                }
+                else
+                {
+                    isCtrlKeyPressed = G2T_TRUE;
+                }
+                if (env->accel[i].shiftkey)
+                {
+                    if (GetKeyState(VK_SHIFT))
+                    {
+                        isShiftKeyPressed = G2T_TRUE;
+                    }
+                }
+                else
+                {
+                    isShiftKeyPressed = G2T_TRUE;
+                }
+                if (isVkeyPressed && isCtrlKeyPressed && isShiftKeyPressed)
                 {
                     g2t_SendMsg(g2t_GetFrameWnd(msg->wnd),
                                 GWM_COMMAND,
@@ -651,14 +725,14 @@ g2t_status _g2t_TranslateMsg(g2t_msg* msg)
 
     /* parent window */
     rc = g2t_SendMsg(env->activewnd, GWM_KEYDOWN, msg->wparam, 0);
-    rc = g2t_SendMsg(env->activewnd, GWM_CHAR, msg->wparam, 0);
-    rc = g2t_SendMsg(env->activewnd, GWM_KEYUP, msg->wparam, 0);
+    rc = g2t_SendMsg(env->activewnd, GWM_CHAR,    msg->wparam, 0);
+    rc = g2t_SendMsg(env->activewnd, GWM_KEYUP,   msg->wparam, 0);
 
     if (msg->wnd != env->activewnd)
     {
         rc = g2t_SendMsg(msg->wnd, GWM_KEYDOWN, msg->wparam, 0);
-        rc = g2t_SendMsg(msg->wnd, GWM_CHAR, msg->wparam, 0);
-        rc = g2t_SendMsg(msg->wnd, GWM_KEYUP, msg->wparam, 0);
+        rc = g2t_SendMsg(msg->wnd, GWM_CHAR,    msg->wparam, 0);
+        rc = g2t_SendMsg(msg->wnd, GWM_KEYUP,   msg->wparam, 0);
     }
 
     return 0;
@@ -718,31 +792,23 @@ LRESULT _g2t_EnvWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     case WM_TIMER:
         _g2t_EnvWndProc_OnTimer(hwnd, wparam, lparam);
         return 0;
+    case WM_NCHITTEST:
+    {
+        UINT nHitTest = DefWindowProc(hwnd, msg, wparam, lparam);
+        nHitTest = (nHitTest == HTCLIENT ? HTCAPTION : nHitTest);
+        return nHitTest;
+    }
 
     case WM_SETFOCUS:
-        /*g2t_NewCaret();*/
-        /*g2t_SetCaretPos(0, 0);*/
+        g2t_NewCaret();
+        g2t_SetCaretPos(0, 0);
         g2t_ShowCaret(GW_SHOW);
         return 0;
 
     case WM_KILLFOCUS:
         g2t_ShowCaret(GW_HIDE);
-        /*g2t_DelCaret();*/
+        g2t_DelCaret();
         return 0;
-
-    case WM_ACTIVATE:
-    case WM_ACTIVATEAPP:
-    {
-        g2t_wnd activewnd = g2t_GetActiveWnd();
-        g2t_wnd activechild = g2t_GetActiveChildWnd(activewnd);
-        g2t_SetFocus(activechild);
-        return 0;
-    }
-
-        case WM_LBUTTONDOWN:
-        case WM_RBUTTONDOWN:
-            SetForegroundWindow(hwnd);
-            return 0;
 
     case GWM_MSGPOST:
         _g2t_EnvWndProc_OnMsgPost(hwnd, wparam, lparam);
@@ -793,7 +859,7 @@ g2t_void _g2t_EnvWndProc_OnKeyDown(HWND hwnd, WPARAM wparam, LPARAM lparam)
     g2t_env env = g2t_GetEnv();
     g2t_wnd wnd = env->activewnd;
     g2t_long rc = G2T_CONTINUE;
-    g2t_wnd child = (wnd ? wnd->activechild : 0);
+    g2t_wnd child = (wnd ? wnd->activechild : 0);/*(g2t_wnd)(wnd ? g2t_SendMsg(wnd->activechild, GWM_GETACTIVECHILD, 0, 0) : 0);*/
     g2t_wnd parent = 0;
     g2t_wnd nextwnd = 0;
     g2t_wnd nextchild = 0;
@@ -929,7 +995,7 @@ g2t_void _g2t_EnvWndProc_OnKeyDown(HWND hwnd, WPARAM wparam, LPARAM lparam)
             (wparam >= 'a' && wparam <= 'z'))
         {
             /* mnemomic to static text */
-            if (GetAsyncKeyState(VK_CONTROL))
+            if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_SHIFT))
             {
                 g2t_wnd childwnd = _g2t_FindMnemonic(
                                         g2t_GetFrameWnd(env->activewnd),
@@ -968,7 +1034,7 @@ g2t_void _g2t_EnvWndProc_OnChar(HWND hwnd, WPARAM wparam, LPARAM lparam)
     g2t_env env = g2t_GetEnv();
     g2t_wnd wnd = env->activewnd;
     g2t_long rc = G2T_CONTINUE;
-    g2t_wnd child = (wnd ? wnd->activechild : 0);
+    g2t_wnd child = (wnd ? wnd->activechild : 0);/*(g2t_wnd)(wnd ? g2t_SendMsg(wnd->activechild, GWM_GETACTIVECHILD, 0, 0) : 0);*/
 
     if (child)
     {
@@ -1271,6 +1337,33 @@ g2t_string g2t_strncpy(g2t_string dst, g2t_string src, g2t_uint32 len)
     return strncpy(dst, src, len);
 }
 
+g2t_string   g2t_strstr(g2t_string src, g2t_string searchstr)
+{
+    return strstr(src, searchstr);
+}
+
+g2t_string   g2t_strchr(g2t_string src, g2t_char searchch)
+{
+    return strchr(src, searchch);
+}
+
+g2t_long g2t_strcpywo(g2t_string dst, g2t_string src, g2t_char ignoredch)
+{
+    while (*src != 0)
+    {
+        if (*src == ignoredch)
+        {
+            ++src;
+            continue;
+        }
+        *dst = *src;
+        ++src;
+        ++dst;
+    }
+    *dst = 0;
+    return g2t_strlen(dst);
+}
+
 g2t_buffer g2t_malloc(g2t_uint32 len)
 {
     g2t_buffer buf = 0;
@@ -1328,6 +1421,7 @@ g2t_long _g2t_DefWndProc_OnEnable(g2t_wnd wnd, g2t_long enable);
 g2t_long _g2t_DefWndProc_OnGetCursor(g2t_wnd wnd, g2t_pos* pos);
 g2t_long _g2t_DefWndProc_OnSetCursor(g2t_wnd wnd, g2t_pos* pos);
 g2t_void _g2t_DefWndProc_OnDestroy(g2t_wnd wnd);
+g2t_wnd _g2t_DefWndProc_OnGetActiveChild(g2t_wnd wnd);
 /*------------------------------------------------------------------------*/
 g2t_void _g2t_DestroyWnd(g2t_wnd wnd);
 
@@ -1515,7 +1609,6 @@ g2t_status _g2t_InvalidateWnd(g2t_wnd wnd)
     /* draw itself */
     g2t_SendMsg(wnd, GWM_ERASEBK, (g2t_wparam) memdc, 0);
     g2t_SendMsg(wnd, GWM_PAINT, 0, 0);
-    /* draw children */
     while (child)
     {
         g2t_SendMsg(child, GWM_ERASEBK, (g2t_wparam) memdc, 0);
@@ -1542,20 +1635,21 @@ g2t_status g2t_InvalidateWnd(g2t_wnd wnd)
 {
     g2t_status rc = _g2t_InvalidateWnd(wnd);
     g2t_wnd activechild = g2t_GetActiveChildWnd(wnd);
-#if 0
     if (!activechild)
     {
         activechild = g2t_GetFirstActiveChildWnd(wnd);
     }
     if (activechild)
     {
-        /*g2t_SetFocus(activechild);
-        g2t_MoveXY(activechild->x, activechild->y);*/
-        /* finally, paint the active window */
-        g2t_SendMsg(activechild, GWM_ERASEBK, (g2t_wparam) g2t_GetMemDC(), 0);
+        g2t_char clsname[G2T_MAX_WNDTEXT+1];
+        g2t_GetClassName(activechild, clsname, G2T_MAX_WNDTEXT);
+        if (g2t_strcmp(clsname, G2T_STATIC) != 0)
+        {
+            /* finally, paint the active window */
+            g2t_SendMsg(activechild, GWM_ERASEBK, (g2t_wparam) g2t_GetMemDC(), 0);
+        }
         g2t_SendMsg(activechild, GWM_PAINT, 0, 0);
     }
-#endif
     return rc;
 }
 
@@ -1592,7 +1686,17 @@ g2t_status g2t_SetFocus(g2t_wnd wnd)
             parent->activechild = wnd;
         }
     }
+    if (parent != env->activewnd)
+    {
+        env->activewnd;
+    }
     return rc;
+}
+
+g2t_wnd _g2t_DefWndProc_OnGetActiveChild(g2t_wnd wnd)
+{
+    g2t_wnd child = (wnd ? wnd->activechild : 0);
+    return child;
 }
 
 g2t_void _g2t_DefWndProc_OnDestroy(g2t_wnd wnd)
@@ -1800,14 +1904,14 @@ g2t_void _g2t_DefWndProc_OnSetFocus(g2t_wnd wnd)
     }
     g2t_SendMsg(g2t_GetParent(wnd), GWM_NOTIFY, 0, (g2t_lparam) & di);
 
-    g2t_ShowCaret(GW_SHOW);
     g2t_GetWndRect(wnd, &rcwnd);
     g2t_MoveXY(rcwnd.x, rcwnd.y);
+    g2t_ShowCaret(GW_SHOW);
 }
 
 g2t_long _g2t_DefWndProc_OnShow(g2t_wnd wnd, g2t_long show)
 {
-    g2t_long rc = G2T_OK;
+    g2t_long rc = g2t_InvalidateWnd(wnd);
     g2t_wnd activechild = g2t_GetActiveChildWnd(wnd);
     wnd->visible = show;
 
@@ -1818,15 +1922,11 @@ g2t_long _g2t_DefWndProc_OnShow(g2t_wnd wnd, g2t_long show)
     if (activechild)
     {
         /* finally, paint the active window */
-        g2t_SendMsg(activechild, GWM_ERASEBK, (g2t_wparam) g2t_GetDC(), 0);
-        g2t_SendMsg(activechild, GWM_PAINT, 0, 0);
+        /*g2t_SendMsg(activechild, GWM_ERASEBK, (g2t_wparam) g2t_GetDC(), 0);
+        g2t_SendMsg(activechild, GWM_PAINT, 0, 0);*/
+        g2t_InvalidateWnd(activechild);
+        g2t_SetFocus(activechild);
     }
-    rc = g2t_InvalidateWnd(wnd);
-    if (activechild)
-    {
-        g2t_SendMsg(activechild, GWM_SETFOCUS, 0, 0);
-    }
-
     return rc;
 }
 
@@ -1840,72 +1940,76 @@ g2t_int32 g2t_DefWndProc(g2t_wnd wnd, g2t_uint32 msg, g2t_wparam wparam, g2t_lpa
 {
     switch (msg)
     {
-    case GWM_CREATE:
-        return G2T_CONTINUE;
+        case GWM_CREATE:
+            return G2T_CONTINUE;
 
-    case GWM_KILLFOCUS:
-        return _g2t_DefWndProc_OnKillFocus(wnd);
+        case GWM_KILLFOCUS:
+            return _g2t_DefWndProc_OnKillFocus(wnd);
 
-    case GWM_SHOW:
-    {
-        return _g2t_DefWndProc_OnShow(wnd,
-                                      (GW_HIDE == wparam ? GW_HIDE : GW_SHOW));
-    }
+        case GWM_SHOW:
+        {
+            return _g2t_DefWndProc_OnShow(wnd,
+                                          (GW_HIDE == wparam ? GW_HIDE : GW_SHOW));
+        }
 
-    case GWM_ENABLE:
-    {
-        return _g2t_DefWndProc_OnEnable(wnd,
-                                        (GW_DISABLE == wparam ? GW_DISABLE : GW_ENABLE));
-    }
+        case GWM_ENABLE:
+        {
+            return _g2t_DefWndProc_OnEnable(wnd,
+                                            (GW_DISABLE == wparam ? GW_DISABLE : GW_ENABLE));
+        }
 
-    case GWM_SETFOCUS:
-    {
-        _g2t_DefWndProc_OnSetFocus(wnd);
-        break;
-    }
+        case GWM_SETFOCUS:
+        {
+            _g2t_DefWndProc_OnSetFocus(wnd);
+            break;
+        }
 
-    case GWM_ERASEBK:
-    {
-        return _g2t_DefWndProc_OnEraseBk(wnd, (HDC) wparam);
-    }
+        case GWM_ERASEBK:
+        {
+            return _g2t_DefWndProc_OnEraseBk(wnd, (HDC) wparam);
+        }
 
-    case GWM_SETINFOTEXT:
-    {
-        _g2t_DefWndProc_OnSetInfoText(wnd, (g2t_string) lparam);
-        return 0;
-    }
-    case GWM_GETINFOTEXT:
-    {
-        return _g2t_DefWndProc_OnGetInfoText(wnd, (g2t_string) lparam, wparam);
-    }
+        case GWM_SETINFOTEXT:
+        {
+            _g2t_DefWndProc_OnSetInfoText(wnd, (g2t_string) lparam);
+            return 0;
+        }
+        case GWM_GETINFOTEXT:
+        {
+            return _g2t_DefWndProc_OnGetInfoText(wnd, (g2t_string) lparam, wparam);
+        }
 
-    case GWM_SETTEXT:
-    {
-        _g2t_DefWndProc_OnSetText(wnd, (g2t_string) lparam);
-        return 0;
-    }
-    case GWM_GETTEXT:
-    {
-        return _g2t_DefWndProc_OnGetText(wnd, (g2t_string) lparam, wparam);
-    }
-    case GWM_SETTEXTALIGN:
-    {
-        _g2t_DefWndProc_OnSetTextAlign(wnd, wparam);
-    }
-    case GWM_SETTEXTATTRS:
-    {
-        return _g2t_DefWndProc_OnSetTextAttrs(wnd, wparam, lparam);
-    }
-    case GWM_GETTEXTATTRS:
-    {
-        _g2t_DefWndProc_OnGetTextAttrs(wnd);
-        break;
-    }
-    case GWM_DESTROY:
-    {
-        _g2t_DefWndProc_OnDestroy(wnd);
-        break;
-    }
+        case GWM_SETTEXT:
+        {
+            _g2t_DefWndProc_OnSetText(wnd, (g2t_string) lparam);
+            return 0;
+        }
+        case GWM_GETTEXT:
+        {
+            return _g2t_DefWndProc_OnGetText(wnd, (g2t_string) lparam, wparam);
+        }
+        case GWM_SETTEXTALIGN:
+        {
+            _g2t_DefWndProc_OnSetTextAlign(wnd, wparam);
+        }
+        case GWM_SETTEXTATTRS:
+        {
+            return _g2t_DefWndProc_OnSetTextAttrs(wnd, wparam, lparam);
+        }
+        case GWM_GETTEXTATTRS:
+        {
+            _g2t_DefWndProc_OnGetTextAttrs(wnd);
+            break;
+        }
+        case GWM_DESTROY:
+        {
+            _g2t_DefWndProc_OnDestroy(wnd);
+            break;
+        }
+        case GWM_GETACTIVECHILD:
+        {
+            return (g2t_lparam)_g2t_DefWndProc_OnGetActiveChild(wnd);
+        }
     }
     return G2T_OK;
 }
@@ -2164,19 +2268,18 @@ g2t_void g2t_DestroyWnd(g2t_wnd wnd)
 }
 
 g2t_wnd g2t_CreateWnd(
-                      g2t_string clsname,
-                      g2t_string wndname,
-                      g2t_dword style,
-                      g2t_dword exstyle,
-                      g2t_int y,
-                      g2t_int x,
-                      g2t_int lines,
-                      g2t_int cols,
-                      g2t_wnd parent,
-                      g2t_uint32 id,
-                      g2t_string infotext,
-                      g2t_void* param
-                      )
+    g2t_string clsname,
+    g2t_string wndname,
+    g2t_dword style,
+    g2t_dword exstyle,
+    g2t_int y,
+    g2t_int x,
+    g2t_int lines,
+    g2t_int cols,
+    g2t_wnd parent,
+    g2t_uint32 id,
+    g2t_string infotext,
+    g2t_void* param)
 {
     g2t_status rc = G2T_CONTINUE;
     g2t_wnd child = 0;
@@ -2232,18 +2335,101 @@ g2t_validateproc g2t_SetWndValidateProc(g2t_wnd wnd, g2t_validateproc validatepr
     return oldproc;
 }
 
+g2t_wnd g2t_CreatePageWnd(
+    g2t_string clsname,
+    g2t_dword style,
+    g2t_dword exstyle,
+    g2t_int y,
+    g2t_int x,
+    g2t_int lines,
+    g2t_int cols,
+    g2t_wnd parent,
+    g2t_uint32 id,
+    g2t_frmwndtemplate* templs,
+    g2t_lparam lparam)
+{
+    g2t_status rc = G2T_CONTINUE;
+    g2t_wnd wnd = 0;
+    g2t_wnd child = 0;
+    g2t_int i = 0;
+    g2t_dword childstyle = 0;
+
+    wnd = g2t_CreateWnd(
+                        clsname,
+                        "UNTITLED-PAGE",
+                        style,
+                        exstyle,
+                        y,
+                        x,
+                        lines,
+                        cols,
+                        parent,
+                        id,
+                        "",
+                        (g2t_void*)lparam);
+    if (wnd && templs)
+    {
+        for (i = 0; templs[i].clsname; ++i)
+        {
+            childstyle = templs[i].style;
+            childstyle &= ~GWS_WINDOW; /* others must be child */
+            childstyle |= GWS_CHILD; /* others must be child */
+            child = _g2t_CreateWnd(
+                                   templs[i].clsname,
+                                   templs[i].text,
+                                   childstyle,
+                                   templs[i].exstyle,
+                                   templs[i].y,
+                                   templs[i].x,
+                                   templs[i].lines,
+                                   templs[i].cols,
+                                   wnd,
+                                   templs[i].id,
+                                   templs[i].infotext,
+                                   0
+                                   );
+            if (!child)
+            {
+                _g2t_DestroyWnd(wnd);
+                wnd = 0;
+            }
+            else
+            {
+                g2t_SetWndValidateProc(child, (g2t_validateproc) templs[i].validateproc);
+            }
+        } /* create children */
+
+        if (wnd)
+        {
+            g2t_SendMsg(wnd, GWM_ERASEBK, (g2t_wparam) g2t_GetDC(), 0);
+            rc = g2t_SendMsg(wnd, GWM_INITPAGE, (g2t_wparam) 0, (g2t_lparam)lparam);
+            if (rc != G2T_CONTINUE)
+            {
+                _g2t_DestroyWnd(wnd);
+                wnd = 0;
+            }
+            child = g2t_GetFirstActiveChildWnd(wnd);
+            if (child)
+            {
+                wnd->activechild = child;
+                /*g2t_SetFocus(child);*/
+            }
+        }
+    } /* templs is allocated */
+    return wnd;
+}
+
 g2t_wnd g2t_CreateFrameWnd(
-                           g2t_string clsname,
-                           g2t_string wndname,
-                           g2t_dword style,
-                           g2t_dword exstyle,
-                           g2t_int y,
-                           g2t_int x,
-                           g2t_int lines,
-                           g2t_int cols,
-                           g2t_frmwndtemplate* templs,
-                           g2t_void* param
-                           )
+    g2t_string clsname,
+    g2t_string wndname,
+    g2t_dword style,
+    g2t_dword exstyle,
+    g2t_int y,
+    g2t_int x,
+    g2t_int lines,
+    g2t_int cols,
+    g2t_frmwndtemplate* templs,
+    g2t_void* param    )
 {
     g2t_status rc = G2T_CONTINUE;
     g2t_wnd wnd = 0;

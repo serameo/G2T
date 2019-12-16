@@ -700,12 +700,8 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
     g2t_dword style = g2t_GetWndStyle(wnd);
     g2t_char buf[G2T_BUFSIZ];
     g2t_dword wndbgcolor = g2t_GetBgColor(wnd);
+    /*g2t_dword highlight = g2t_GetSysColor(COLOR_HIGHLIGHTED);*/
     g2t_int ysel = 0;
-    g2t_dword oddtext =  g2t_GetSysColor(LISTCTRL_ODD_TEXTCOLOR);
-    g2t_dword oddbg =    g2t_GetSysColor(LISTCTRL_ODD_BGCOLOR);
-    g2t_dword eventext = g2t_GetSysColor(LISTCTRL_EVEN_TEXTCOLOR);
-    g2t_dword evenbg =   g2t_GetSysColor(LISTCTRL_EVEN_BGCOLOR);
-
 
     lctl = (PTLISTCTRL) g2t_GetWndParam(wnd);
 
@@ -738,6 +734,11 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
 
     g2t_memset(buf, ' ', rcwnd.cols);
     buf[rcwnd.cols] = 0;
+    /*for (i = 0; i < rcwnd.lines; ++i)
+    {
+        g2t_DrawText(dc, rcwnd.x, rcwnd.y, buf, htextcolor, hbgcolor);
+    }
+     */
 
     while (header && width <= rcwnd.cols)
     {
@@ -792,22 +793,9 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
             }
             else if (i - lctl->firstvisiblerow <= rcwnd.lines - 2)
             {
+
                 textcolor = visiblecell->textcolor;
                 bgcolor = visiblecell->bgcolor;
-                if (TLCS_MULTICOLOR & style)
-                {
-                    if (0 == i%2)
-                    {
-                        textcolor = eventext;
-                        bgcolor = evenbg;
-                    }
-                    else
-                    {
-                        textcolor = oddtext;
-                        bgcolor = oddbg;
-                    }
-                }
-
                 if (!(TLCS_NOSELECTION & style) && i == lctl->curselrow)
                 {
                     textcolor = g2t_GetReverseColor(textcolor);
@@ -816,7 +804,7 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
                 }
                 /* draw th item that it can be seen */
                 _TLC_DrawItem(dc, &rccell,
-                                  visiblecell->caption, textcolor, bgcolor, header->align, 0);
+                              visiblecell->caption, textcolor, bgcolor, header->align, 0);
 
                 /* update cell rect */
                 visiblecell->y = rccell.y;
@@ -845,10 +833,15 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
         }
     } /* while header */
 
+    /* print arrow controls */
+    /*attrs = TuiReverseColor(hdrattrs);*/
+    /*textcolor = g2t_GetReverseColor(header->textcolor);
+    bgcolor = g2t_GetReverseColor(header->bgcolor);*/
     if (lctl->firsthdr != lctl->firstvisiblehdr)
     {
         if (!(style & TLCS_NOHEADER))
         {
+            /*g2t_PutChar(dc, rcwnd.x + 1, rcwnd.y, '<', htextcolor, hbgcolor);*/
         }
     }
     /* save the last visible */
@@ -857,6 +850,9 @@ g2t_void _TLC_OnPaint(g2t_wnd wnd, g2t_dc dc)
         lctl->lastvisiblehdr = header->prev;
         if (!(style & TLCS_NOHEADER))
         {
+            /*g2t_PutChar(dc,
+                        rcwnd.x + width - header->cols - 2,
+                        rcwnd.y, '>', htextcolor, hbgcolor);*/
         }
     }
     else

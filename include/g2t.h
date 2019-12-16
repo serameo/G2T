@@ -28,6 +28,8 @@ extern "C" {
 #define GF_LUCIDA_CONSOLE   "Lucida Console"
 #define GF_TERMINAL         "Terminal"
 
+#define G2T_SCREEN_LINES    25
+#define G2T_SCREEN_COLS     80
 #define G2T_HTEXTSPACES     (0)
 #define G2T_RGB_BLACK       RGB(  0,   0,   0)
 #define G2T_RGB_RED         RGB(255,   0,   0)
@@ -41,6 +43,8 @@ extern "C" {
 
 #define ENV_FONT                            "Env.Font"
 #define ENV_FONT_HSPACES                    "Env.FontHSpaces"
+#define ENV_SCREEN_LINES                    "Env.Screen.Lines"
+#define ENV_SCREEN_COLS                     "Env.Screen.Cols"
     /*color schemes */
 #define ENV_TEXTCOLOR                       "Env.TextColor"
 #define ENV_BGCOLOR                         "Env.BgColor"
@@ -94,12 +98,14 @@ extern "C" {
 #define APP_PRICE_DOWN_TEXTCOLOR            "App.Price.Down.TextColor"
 #define APP_PRICE_DOWN_BGCOLOR              "App.Price.Down.BgColor"
 
-#define G2T_STATIC          "G2T_STATIC"
-#define G2T_EDITBOX         "G2T_EDITBOX"
-#define G2T_LISTBOX         "G2T_LISTBOX"
-#define G2T_LISTCTRL        "G2T_LISTCTRL"
-#define G2T_TREECTRL        "G2T_TREECTRL"
+#define G2T_STATIC                          "G2T_STATIC"
+#define G2T_EDITBOX                         "G2T_EDITBOX"
+#define G2T_LISTBOX                         "G2T_LISTBOX"
+#define G2T_LISTCTRL                        "G2T_LISTCTRL"
+#define G2T_TREECTRL                        "G2T_TREECTRL"
 #define G2T_TSCHART         "G2T_TIMESERIESCHART"
+#define G2T_PAGECTRL                        "G2T_PAGECTRL"
+#define G2T_CHILDPAGE                       "G2T_CHILDPAGE"
 
     /* status */
 #define G2T_BYPASS          (0xffff)
@@ -189,6 +195,8 @@ extern "C" {
 #define GWM_ENABLE              (GWM_FIRST +   23) /* enable window       */
 #define GWM_GETCURSOR           (GWM_FIRST +   24) /* get cursor          */
 #define GWM_SETCURSOR           (GWM_FIRST +   25) /* set cursor          */
+#define GWM_INITPAGE            (GWM_FIRST +   26) /* get when system initialized window page */
+#define GWM_GETACTIVECHILD      (GWM_FIRST +   27)
 
 #define TWM_FIRST               GWM_FIRST       
 #define TWM_CREATE              GWM_CREATE      
@@ -235,14 +243,12 @@ extern "C" {
 #define TWM_USER                GWM_USER
 
 /* notification control message */
-/*#define TCN_FIRST               (TWM_USER +   50)*/
 #define TSN_FIRST               (TWM_USER +  100)
-/*#define TEN_FIRST               (TWM_USER +  150)*/
-#define TEDN_FIRST               (TWM_USER +  150)
+#define TEDN_FIRST              (TWM_USER +  150)
 #define TLBN_FIRST              (TWM_USER +  200)
-/*#define TBN_FIRST               (TWM_USER +  250)*/
 #define TLCN_FIRST              (TWM_USER +  300)
 #define TTCN_FIRST              (TWM_USER +  350)
+#define TPCN_FIRST              (TWM_USER +  400)
 
     /* display info */
 #define GCN_DISPLAYINFO         (GCN_FIRST +   1) /* see also DISPLAYINFO */
@@ -323,9 +329,9 @@ extern "C" {
 #define TEN_KILLFOCUS           (TEDN_FIRST  +   2)
 #define TEN_KEYPRESSED          (TEDN_FIRST  +   3)
 
-    /*-------------------------------------------------------------------
-    * listbox control
-    *-----------------------------------------------------------------*/
+/*-------------------------------------------------------------------
+* listbox control
+*-----------------------------------------------------------------*/
 
 #define GLB_OK                   G2T_OK
 #define GLB_ERROR                G2T_ERROR
@@ -478,7 +484,26 @@ extern "C" {
 #define TTCN_SETFOCUS               (TTCN_FIRST +     7)
 #define TTCN_ENTERITEM              (TTCN_FIRST  +    8)
 
-    /* define types */
+/*-------------------------------------------------------------------
+* page control
+*-----------------------------------------------------------------*/
+#define TPCM_FIRST                  (TWM_USER   +     0)
+#define TPCM_ADDPAGE                (TPCM_FIRST +     1)
+#define TPCM_REMOVEPAGE             (TPCM_FIRST +     2)
+#define TPCM_REMOVEALLPAGES         (TPCM_FIRST +     3)
+#define TPCM_REMOVEPAGEID           (TPCM_FIRST +     4)
+#define TPCM_GOTOPAGE               (TPCM_FIRST +     5)
+#define TPCM_GOTOFIRSTPAGE          (TPCM_FIRST +     6)
+#define TPCM_GOTOLASTPAGE           (TPCM_FIRST +     7)
+#define TPCM_GOTOPREVPAGE           (TPCM_FIRST +     8)
+#define TPCM_GOTONEXTPAGE           (TPCM_FIRST +     9)
+#define TPCM_GETPAGEID              (TPCM_FIRST +    10)
+/*child page*/
+#define TCPM_FIRST                  (TWM_USER   +     0)
+#define TCPM_SHOWPAGE               (TCPM_FIRST +     1) /* get when system initialized window page */
+#define TCPM_ACTIVATEPAGE           (TCPM_FIRST +     2)
+
+/* define types */
 
 struct _g2t_env;
 typedef struct _g2t_env* g2t_env;
@@ -652,6 +677,9 @@ g2t_string g2t_strnew(g2t_uint32 len);
 g2t_void   g2t_strdel(g2t_string str);
 g2t_string g2t_strcat(g2t_string dst, g2t_string src);
 g2t_string g2t_strncpy(g2t_string dst, g2t_string src, g2t_uint32 len);
+g2t_string g2t_strstr(g2t_string src, g2t_string searchstr);
+g2t_string g2t_strchr(g2t_string src, g2t_char searchch);
+g2t_long   g2t_strcpywo(g2t_string dst, g2t_string src, g2t_char ignoredch);
 
 /* simple memory */
 g2t_buffer g2t_malloc(g2t_uint32 len);
@@ -660,7 +688,7 @@ g2t_status g2t_memcpy(g2t_buffer dst, g2t_buffer src, g2t_uint32 len);
 g2t_int    g2t_memcmp(g2t_buffer dst, g2t_buffer src, g2t_uint32 len);
 g2t_status g2t_memset(g2t_buffer dst, g2t_int val, g2t_uint32 len);
 
-typedef g2t_int32(*g2t_wndproc)(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
+typedef g2t_long(*g2t_wndproc)(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
 typedef g2t_int32(*g2t_validateproc)(g2t_wnd, g2t_string);
 
 struct _g2t_frmwndtemplate
@@ -686,33 +714,35 @@ typedef struct _g2t_frmwndtemplate g2t_frmwndtemplate;
 /* accelerator */
 struct _g2t_accel
 {
-    g2t_int     vkey;
-    g2t_uint32  cmd;
+    g2t_long        vkey;
+    g2t_long        ctrlkey;
+    g2t_long        shiftkey;
+    g2t_uint32      cmd;
 };
 typedef struct _g2t_accel g2t_accel;
 
 
 struct _HEADERITEMSTRUCT
 {
-    g2t_string     caption;
-    TINT          cols;
-    TINT          align;      /* column alignment         */
-    TDWORD        textcolor;      /* header text attributes   */
-    TDWORD        bgcolor;      /* header text attributes   */
-    TDWORD        editstyle;  /* edit style, see TES_XXX  */
-    TINT          decwidth;   /* TES_DECIMAL or TES_AUTODECIMALCOMMA, default 6 */
+    g2t_string      caption;
+    TINT            cols;
+    TINT            align;      /* column alignment         */
+    TDWORD          textcolor;      /* header text attributes   */
+    TDWORD          bgcolor;      /* header text attributes   */
+    TDWORD          editstyle;  /* edit style, see TES_XXX  */
+    TINT            decwidth;   /* TES_DECIMAL or TES_AUTODECIMALCOMMA, default 6 */
 };
 typedef struct _HEADERITEMSTRUCT THEADERITEM;
 
 
 struct _SUBITEMSTRUCT
 {
-    TINT          col;      /* column index, zero based */
-    TINT          idx;      /* row index, zero based    */
-    g2t_string     text;
-    TDWORD        textcolor;      /* header text attributes   */
-    TDWORD        bgcolor;      /* header text attributes   */
-    g2t_lparam    data;     /* user data                */
+    TINT            col;      /* column index, zero based */
+    TINT            idx;      /* row index, zero based    */
+    g2t_string      text;
+    TDWORD          textcolor;      /* header text attributes   */
+    TDWORD          bgcolor;      /* header text attributes   */
+    g2t_lparam      data;     /* user data                */
 };
 typedef struct _SUBITEMSTRUCT TSUBITEM;
 
@@ -738,6 +768,7 @@ g2t_void g2t_ShutDown();
 g2t_void g2t_ShutDown();
 
 HWND g2t_GetHwnd();
+HWND g2t_GetHwndParent();
 g2t_void g2t_ReleaseEnvWnd();
 g2t_status g2t_AllocateEnvWnd(
     g2t_dword dwExStyle,
@@ -759,15 +790,17 @@ g2t_bool g2t_SetCaretPos(g2t_int x, g2t_int y);
 g2t_bool g2t_ShowCaret(g2t_bool show);
 g2t_bool g2t_DelCaret();
 
-g2t_status g2t_LoadProperties(g2t_string filename);
-g2t_dword  g2t_GetSysColor(g2t_string);
-g2t_dword  g2t_GetSysTextColor();
-g2t_dword  g2t_GetSysBgColor();
-g2t_dword  g2t_GetSysDisabledTextColor();
-g2t_dword  g2t_GetSysDisabledBgColor();
-g2t_dword  g2t_GetSysHighlightedTextColor();
-g2t_dword  g2t_GetSysHighlightedBgColor();
-g2t_dword  g2t_GetReverseColor(g2t_dword color);
+g2t_long    g2t_GetScreenColumns();
+g2t_long    g2t_GetScreenLines();
+g2t_status  g2t_LoadProperties(g2t_string filename);
+g2t_dword   g2t_GetSysColor(g2t_string);
+g2t_dword   g2t_GetSysTextColor();
+g2t_dword   g2t_GetSysBgColor();
+g2t_dword   g2t_GetSysDisabledTextColor();
+g2t_dword   g2t_GetSysDisabledBgColor();
+g2t_dword   g2t_GetSysHighlightedTextColor();
+g2t_dword   g2t_GetSysHighlightedBgColor();
+g2t_dword   g2t_GetReverseColor(g2t_dword color);
 
 /*
 * g2t_DefWndProc()
@@ -778,6 +811,7 @@ g2t_dword  g2t_GetReverseColor(g2t_dword color);
 *   g2t_lparam - second parameter
 */
 g2t_int32 g2t_DefWndProc(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
+g2t_int32 g2t_DefPageWndProc(g2t_wnd, g2t_uint32, g2t_wparam, g2t_lparam);
 /*
 * g2t_RegisterCls()
 *   All window classes MUST be registered before creating its window instance
@@ -849,6 +883,19 @@ g2t_wnd g2t_CreateFrameWnd(
     g2t_frmwndtemplate* templs,
     g2t_void*    param
     );
+
+g2t_wnd g2t_CreatePageWnd(
+    g2t_string clsname,
+    g2t_dword style,
+    g2t_dword exstyle,
+    g2t_int y,
+    g2t_int x,
+    g2t_int lines,
+    g2t_int cols,
+    g2t_wnd parent,
+    g2t_uint32 id,
+    g2t_frmwndtemplate* templs,
+    g2t_lparam lparam);
 /*
 * g2t_ShowWnd()
 *   Show window object
@@ -861,6 +908,7 @@ g2t_status   g2t_ShowWnd(g2t_wnd wnd, g2t_bool show);
 *   show - TW_ENABLE or TW_DISABLE
 */
 g2t_status   g2t_EnableWnd(g2t_wnd wnd, g2t_bool enable);
+
 /*
 * g2t_IsWndEnabled()
 *   Check if window object is enabled
